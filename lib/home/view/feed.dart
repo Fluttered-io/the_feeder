@@ -26,16 +26,14 @@ const colors = [
 class Feed extends StatefulWidget {
   const Feed({super.key});
 
-  /// The amount of screen that has to be scrolled to animate the card to the
+  /// The amount of screen that has to be scrolled to animate the item to the
   /// next or previous position.
   static const double swipePositionThreshold = 0.2;
 
-  /// This threshold will override [swipePositionThreshold] if the card is
-  /// flicked a small distance but quickly,
+  /// It will override the [swipePositionThreshold] if the item is dragged
+  /// quickly.
   static const double swipeVelocityThreshold = 1000;
 
-  /// The time the card will take to animate to either off the screen or its
-  /// resting position,
   static const Duration animationDuration = Duration(milliseconds: 400);
 
   @override
@@ -149,15 +147,12 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
                 if (index == 0) {
                   _state = DragState.animatingToCancel;
                 } else {
-                  // if we are not on the first card and swiping back
-                  // Animate to previous card
                   _state = DragState.animatingBackward;
                 }
               } else if (positiveDragThresholdMet &&
                   index == testContentSize - 1) {
                 _state = DragState.animatingToCancel;
               } else {
-                // Thresholds not met so relaxing back to initial state
                 _state = DragState.animatingToCancel;
               }
               setState(() {
@@ -203,8 +198,10 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
         _end = _containerSize.height;
         break;
       case DragState.animatingToCancel:
-      default:
+      case DragState.idle:
+      case DragState.dragging:
         _end = 0;
+        break;
     }
     _animation = Tween<double>(begin: _currentItemOffset, end: _end)
         .animate(_animationController)
@@ -213,31 +210,31 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
     _animationController.forward();
   }
 
+  /// Keep track of instantaneous card position offsets
+  void _animationListener() {
+    setState(() {
+      _currentItemOffset = _animation.value;
+    });
+  }
+
   void _animationStatusListener(AnimationStatus _status) {
     switch (_status) {
       case AnimationStatus.completed:
         // change the card index if required,
         // change the offset back to zero,
         // change the drag state back to idle
-        var _newCardIndex = context.read<HomeCubit>().state.currentItemIndex;
-        // we finished the scroll and updated the card
-        switch (_dragState) {
-          case DragState.animatingForward:
-            _newCardIndex++;
-            break;
-          case DragState.animatingBackward:
-            _newCardIndex--;
-            break;
-          case DragState.animatingToCancel:
-            //no change to card index
-            break;
-          default:
+        final isAnimationComplete = _status != AnimationStatus.dismissed &&
+            _status != AnimationStatus.forward;
+        var newCardIndex = context.read<HomeCubit>().state.currentItemIndex;
+
+        if (_dragState == DragState.animatingForward) {
+          newCardIndex++;
+        } else if (_dragState == DragState.animatingBackward) {
+          newCardIndex--;
         }
 
-        if (_status != AnimationStatus.dismissed &&
-            _status != AnimationStatus.forward) {
-          // Animation is complete so set state accordingly
-          context.read<HomeCubit>().currentItemIndexChanged(_newCardIndex);
+        if (isAnimationComplete) {
+          context.read<HomeCubit>().currentItemIndexChanged(newCardIndex);
           setState(() {
             _dragState = DragState.idle;
             _currentItemOffset = 0;
@@ -250,7 +247,7 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
           _animation.removeStatusListener(_animationStatusListener);
 
           // check if we need to keep animated after this one is complete
-          if (_targetIndex != -1 && _newCardIndex != _targetIndex) {
+          if (_targetIndex != -1 && newCardIndex != _targetIndex) {
             _animateToPosition(_targetIndex);
           } else {
             setState(() {
@@ -261,13 +258,6 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
         break;
       default:
     }
-  }
-
-  /// Keep track of instantaneous card position offsets
-  void _animationListener() {
-    setState(() {
-      _currentItemOffset = _animation.value;
-    });
   }
 
   /// Implementation used by [Controller] to goto the given page [targetPage]
