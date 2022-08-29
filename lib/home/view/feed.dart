@@ -26,9 +26,8 @@ const colors = [
 class Feed extends StatefulWidget {
   const Feed({super.key});
 
-  /// The fraction of the screen scrolled (before lifting your finger) that will
-  /// cause the card to animate to the next/previous card (otherwise the card
-  /// will animate to the current card's resting position),
+  /// The amount of screen that has to be scrolled to animate the card to the
+  /// next or previous position.
   static const double swipePositionThreshold = 0.2;
 
   /// This threshold will override [swipePositionThreshold] if the card is
@@ -136,7 +135,7 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
                   details.primaryVelocity! < -Feed.swipeVelocityThreshold;
 
               final negativeDragThresholdMet = _currentItemOffset >
-                      _containerSize.height / Feed.swipePositionThreshold ||
+                      _containerSize.height * Feed.swipePositionThreshold ||
                   details.primaryVelocity! > Feed.swipeVelocityThreshold;
 
               DragState _state;
