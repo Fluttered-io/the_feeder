@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:the_feeder/home/home.dart';
 
 class App extends StatelessWidget {
-  const App({Key? key}) : super(key: key);
+  const App({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return _AppView();
+    return const _AppView();
   }
 }
 
@@ -15,7 +15,7 @@ class _AppView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       home: HomePage(),
     );
   }
