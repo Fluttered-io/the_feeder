@@ -12,15 +12,10 @@ enum DragState {
   animatingToCancel,
 }
 
-// TODO(Grau): Replace by count of videos
-const testContentSize = 5;
-
 const colors = [
   Colors.red,
   Colors.green,
   Colors.blue,
-  Colors.yellow,
-  Colors.orange,
 ];
 
 class Feed extends StatefulWidget {
@@ -68,23 +63,25 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         _containerSize = constraints.biggest;
+        final status = context.select((HomeCubit bloc) => bloc.state.status);
 
-        return Stack(
-          children: <Widget>[
-            _buildPreviousItem(),
-            _buildCurrentItem(),
-            _buildNextItem(),
-          ],
-        );
+        return status.isSuccess
+            ? Stack(
+                children: <Widget>[
+                  _buildPreviousItem(),
+                  _buildCurrentItem(),
+                  _buildNextItem(),
+                ],
+              )
+            : const Center(child: CircularProgressIndicator());
       },
     );
   }
 
   Widget _buildPreviousItem() {
-    return Builder(
-      builder: (BuildContext context) {
-        final index =
-            context.select((HomeCubit bloc) => bloc.state.currentItemIndex) - 1;
+    return BlocBuilder<HomeCubit, HomeState>(
+      builder: (BuildContext context, HomeState state) {
+        final index = state.currentItemIndex - 1;
         if (index < 0) return Container();
         return Positioned(
           bottom: _containerSize.height - _currentItemOffset,
@@ -92,7 +89,8 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
             size: _containerSize,
             child: VideoCard(
               index: index,
-              backgroundColor: colors[index],
+              backgroundColor: colors[0],
+              title: state.videos[index].id,
             ),
           ),
         );
@@ -101,10 +99,9 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildCurrentItem() {
-    return Builder(
-      builder: (BuildContext context) {
-        final index =
-            context.select((HomeCubit bloc) => bloc.state.currentItemIndex);
+    return BlocBuilder<HomeCubit, HomeState>(
+      builder: (BuildContext context, HomeState state) {
+        final index = state.currentItemIndex;
         return Positioned(
           top: _currentItemOffset,
           child: GestureDetector(
@@ -112,7 +109,8 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
               size: _containerSize,
               child: VideoCard(
                 index: index,
-                backgroundColor: colors[index],
+                backgroundColor: colors[1],
+                title: state.videos[index].id,
               ),
             ),
             onVerticalDragStart: (DragStartDetails details) {
@@ -139,7 +137,7 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
               DragState _state;
               // If the length of scroll goes beyond the point of no return
               // or if a small flick was faster than the velocity threshold
-              if (positiveDragThresholdMet && index < testContentSize - 1) {
+              if (positiveDragThresholdMet && index < state.videos.length - 1) {
                 // build animation, set state to animate forward
                 // Animate to next card
                 _state = DragState.animatingForward;
@@ -150,7 +148,7 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
                   _state = DragState.animatingBackward;
                 }
               } else if (positiveDragThresholdMet &&
-                  index == testContentSize - 1) {
+                  index == state.videos.length - 1) {
                 _state = DragState.animatingToCancel;
               } else {
                 _state = DragState.animatingToCancel;
@@ -167,18 +165,18 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildNextItem() {
-    return Builder(
-      builder: (BuildContext context) {
-        final index =
-            context.select((HomeCubit bloc) => bloc.state.currentItemIndex) + 1;
-        if (index >= testContentSize) return Container();
+    return BlocBuilder<HomeCubit, HomeState>(
+      builder: (BuildContext context, HomeState state) {
+        final index = state.currentItemIndex + 1;
+        if (index >= state.videos.length) return Container();
         return Positioned(
           top: _containerSize.height + _currentItemOffset,
           child: SizedBox.fromSize(
             size: _containerSize,
             child: VideoCard(
               index: index,
-              backgroundColor: colors[index],
+              backgroundColor: colors[2],
+              title: state.videos[index].id,
             ),
           ),
         );
@@ -266,13 +264,13 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
   /// This function is called per page (ie multiple times if starting position
   /// and [targetPage] are not adjacent pages.
   void _animateToPosition(int targetPage) {
-    final index =
-        context.select((HomeCubit bloc) => bloc.state.currentItemIndex);
     // Check if further animations are required to reach [targetPage]
     if (targetPage == -1) {
       return;
     }
-    if (targetPage > index && index != testContentSize - 1) {
+    final state = context.read<HomeCubit>().state;
+    final index = state.currentItemIndex;
+    if (targetPage > index && index != state.videos.length - 1) {
       setState(() {
         _dragState = DragState.animatingForward;
         _targetIndex = targetPage;

@@ -13,7 +13,7 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: BlocProvider(
-        create: (_) => HomeCubit(context.read<VideosRepository>()),
+        create: (_) => HomeCubit(context.read<VideosRepository>())..getVideos(),
         child: const Feed(),
       ),
     );

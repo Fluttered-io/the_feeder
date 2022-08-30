@@ -20,7 +20,13 @@ class HomeCubit extends Cubit<HomeState> {
   Future<void> getVideos() async {
     emit(state.copyWith(status: const HomeStatus.loading()));
     try {
-      await _videosRepository.getVideos();
+      final videos = await _videosRepository.getVideos();
+      emit(
+        state.copyWith(
+          videos: videos + state.videos,
+          status: const HomeStatus.success(),
+        ),
+      );
     } on api_client.VideoFeedRequestException {
       emit(
         state.copyWith(
