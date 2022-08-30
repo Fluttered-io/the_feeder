@@ -5,7 +5,13 @@ part 'video.freezed.dart';
 
 @freezed
 class Video with _$Video {
-  const factory Video({required String url}) = _Video;
+  const factory Video({
+    required String id,
+    required String url,
+  }) = _Video;
 
-  factory Video.fromApi(api_client.Video video) => Video(url: video.url);
+  factory Video.fromApi(api_client.Video video) => Video(
+        id: video.id,
+        url: video.url,
+      );
 }
