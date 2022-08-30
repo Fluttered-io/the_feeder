@@ -2,19 +2,11 @@ part of 'home_cubit.dart';
 
 @freezed
 class HomeState with _$HomeState {
-  factory HomeState({
-    required HomeStatus status,
-    required int currentItemIndex,
+  const factory HomeState({
+    @Default(HomeStatus.initial()) HomeStatus status,
+    @Default(0) int currentItemIndex,
+    @Default([]) List<Video> videos,
   }) = _HomeState;
-
-  const HomeState._();
-
-  factory HomeState.initial() {
-    return HomeState(
-      status: const HomeStatus.initial(),
-      currentItemIndex: 0,
-    );
-  }
 }
 
 @freezed
@@ -25,7 +17,7 @@ class HomeStatus with _$HomeStatus {
 
   const factory HomeStatus.success() = Success;
 
-  const factory HomeStatus.failure(Error error) = Failure;
+  const factory HomeStatus.failure(String message) = Failure;
 }
 
 extension HomeStatusExtension on HomeStatus {
