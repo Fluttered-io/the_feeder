@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:the_feeder/home/cubit/home_cubit.dart';
-import 'package:the_feeder/home/widgets/video_card.dart';
+import 'package:the_feeder/home/home.dart';
+import 'package:video_player/video_player.dart';
 
 /// Enum to track the current state of manual dragging or animation
 enum DragState {
@@ -42,6 +42,9 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
   late DragState _dragState;
   late Animation<double> _animation;
   late AnimationController _animationController;
+  late VideoPlayerController _previousVideoController;
+  late VideoPlayerController _currentVideoController;
+  late VideoPlayerController _nextVideoController;
 
   /// Internal index for tracking desired controller target page index
   int _targetIndex = -1;
@@ -55,6 +58,9 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
       vsync: this,
       duration: Feed.animationDuration,
     );
+    _previousVideoController = VideoPlayerController.network('');
+    _currentVideoController = VideoPlayerController.network('');
+    _nextVideoController = VideoPlayerController.network('');
     super.initState();
   }
 
@@ -63,124 +69,176 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         _containerSize = constraints.biggest;
-        final status = context.select((HomeCubit bloc) => bloc.state.status);
-
-        return status.isSuccess
-            ? Stack(
-                children: <Widget>[
-                  _buildPreviousItem(),
-                  _buildCurrentItem(),
-                  _buildNextItem(),
-                ],
-              )
-            : const Center(child: CircularProgressIndicator());
-      },
-    );
-  }
-
-  Widget _buildPreviousItem() {
-    return BlocBuilder<HomeCubit, HomeState>(
-      builder: (BuildContext context, HomeState state) {
-        final index = state.currentItemIndex - 1;
-        if (index < 0) return Container();
-        return Positioned(
-          bottom: _containerSize.height - _currentItemOffset,
-          child: SizedBox.fromSize(
-            size: _containerSize,
-            child: VideoCard(
-              index: index,
-              backgroundColor: colors[0],
-              title: state.videos[index].id,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCurrentItem() {
-    return BlocBuilder<HomeCubit, HomeState>(
-      builder: (BuildContext context, HomeState state) {
-        final index = state.currentItemIndex;
-        return Positioned(
-          top: _currentItemOffset,
-          child: GestureDetector(
-            child: SizedBox.fromSize(
-              size: _containerSize,
-              child: VideoCard(
-                index: index,
-                backgroundColor: colors[1],
-                title: state.videos[index].id,
-              ),
-            ),
-            onVerticalDragStart: (DragStartDetails details) {
-              setState(() {
-                _dragState = DragState.dragging;
-                _dragStartPosition = details.localPosition.dy;
-              });
-            },
-            onVerticalDragUpdate: (DragUpdateDetails details) {
-              setState(() {
-                _currentItemOffset =
-                    details.localPosition.dy - _dragStartPosition;
-              });
-            },
-            onVerticalDragEnd: (DragEndDetails details) {
-              final positiveDragThresholdMet = _currentItemOffset <
-                      -_containerSize.height * Feed.swipePositionThreshold ||
-                  details.primaryVelocity! < -Feed.swipeVelocityThreshold;
-
-              final negativeDragThresholdMet = _currentItemOffset >
-                      _containerSize.height * Feed.swipePositionThreshold ||
-                  details.primaryVelocity! > Feed.swipeVelocityThreshold;
-
-              DragState _state;
-              // If the length of scroll goes beyond the point of no return
-              // or if a small flick was faster than the velocity threshold
-              if (positiveDragThresholdMet && index < state.videos.length - 1) {
-                // build animation, set state to animate forward
-                // Animate to next card
-                _state = DragState.animatingForward;
-              } else if (negativeDragThresholdMet) {
-                if (index == 0) {
-                  _state = DragState.animatingToCancel;
-                } else {
-                  _state = DragState.animatingBackward;
-                }
-              } else if (positiveDragThresholdMet &&
-                  index == state.videos.length - 1) {
-                _state = DragState.animatingToCancel;
-              } else {
-                _state = DragState.animatingToCancel;
+        return BlocConsumer<HomeCubit, HomeState>(
+          listenWhen: (previous, current) => current.status != previous.status,
+          buildWhen: (previous, current) => current.status != previous.status,
+          listener: (BuildContext context, HomeState state) {
+            final currentItemIndex = state.currentItemIndex;
+            if (state.status.isSuccess) {
+              _currentVideoController = VideoPlayerController.network(
+                state.videos[currentItemIndex].url,
+              );
+              if (currentItemIndex < state.videos.length - 1) {
+                _nextVideoController = VideoPlayerController.network(
+                  state.videos[currentItemIndex + 1].url,
+                );
               }
-              setState(() {
-                _dragState = _state;
+              _currentVideoController.initialize().then((_) {
+                _currentVideoController
+                  ..setLooping(true)
+                  ..play();
+                setState(() {});
               });
-              _createAnimation();
-            },
-          ),
+              _nextVideoController.initialize().then((_) {
+                _nextVideoController.setLooping(true);
+                setState(() {});
+              });
+            }
+          },
+          builder: (BuildContext context, HomeState state) {
+            return state.status.isSuccess
+                ? MultiBlocListener(
+                    listeners: [
+                      BlocListener<HomeCubit, HomeState>(
+                        listenWhen: (previous, current) =>
+                            current.currentItemIndex >
+                            previous.currentItemIndex,
+                        listener: (BuildContext context, HomeState state) {
+                          final currentItemIndex = state.currentItemIndex;
+                          if (currentItemIndex > 0) {
+                            _previousVideoController =
+                                VideoPlayerController.network(
+                              state.videos[currentItemIndex - 1].url,
+                            );
+                            _previousVideoController.initialize().then((_) {
+                              _previousVideoController.setLooping(true);
+                              setState(() {});
+                            });
+                          }
+                          _currentVideoController.dispose();
+                          _currentVideoController = _nextVideoController
+                            ..play();
+                          _nextVideoController = VideoPlayerController.network(
+                            state.videos[currentItemIndex + 1].url,
+                          )..initialize().then((_) {
+                              _nextVideoController.setLooping(true);
+                              setState(() {});
+                            });
+                        },
+                      ),
+                    ],
+                    child: BlocBuilder<HomeCubit, HomeState>(
+                      buildWhen: (previous, current) =>
+                          current.currentItemIndex != previous.currentItemIndex,
+                      builder: (context, state) {
+                        return Stack(
+                          children: <Widget>[
+                            _buildPreviousItem(state.currentItemIndex - 1),
+                            _buildCurrentItem(
+                              index: state.currentItemIndex,
+                              videosListLength: state.videos.length,
+                            ),
+                            _buildNextItem(
+                              index: state.currentItemIndex + 1,
+                              videosListLength: state.videos.length,
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  )
+                : const Center(child: CircularProgressIndicator());
+          },
         );
       },
     );
   }
 
-  Widget _buildNextItem() {
-    return BlocBuilder<HomeCubit, HomeState>(
-      builder: (BuildContext context, HomeState state) {
-        final index = state.currentItemIndex + 1;
-        if (index >= state.videos.length) return Container();
-        return Positioned(
-          top: _containerSize.height + _currentItemOffset,
-          child: SizedBox.fromSize(
-            size: _containerSize,
-            child: VideoCard(
-              index: index,
-              backgroundColor: colors[2],
-              title: state.videos[index].id,
-            ),
-          ),
-        );
-      },
+  Widget _buildPreviousItem(int index) {
+    if (index < 0) return Container();
+    return Positioned(
+      bottom: _containerSize.height - _currentItemOffset,
+      child: SizedBox.fromSize(
+        size: _containerSize,
+        child: VideoCard(controller: _previousVideoController),
+      ),
+    );
+  }
+
+  Widget _buildCurrentItem({
+    required int index,
+    required int videosListLength,
+  }) {
+    return Positioned(
+      top: _currentItemOffset,
+      child: GestureDetector(
+        child: SizedBox.fromSize(
+          size: _containerSize,
+          child: VideoCard(controller: _currentVideoController),
+        ),
+        onVerticalDragStart: (DragStartDetails details) {
+          setState(() {
+            _dragState = DragState.dragging;
+            _dragStartPosition = details.localPosition.dy;
+          });
+        },
+        onVerticalDragUpdate: (DragUpdateDetails details) {
+          final positiveDragThresholdMet = _currentItemOffset <
+              -_containerSize.height * Feed.swipePositionThreshold;
+          final negativeDragThresholdMet = _currentItemOffset >
+              _containerSize.height * Feed.swipePositionThreshold;
+          setState(() {
+            _currentItemOffset = details.localPosition.dy - _dragStartPosition;
+          });
+        },
+        onVerticalDragEnd: (DragEndDetails details) {
+          final positiveDragThresholdMet = _currentItemOffset <
+                  -_containerSize.height * Feed.swipePositionThreshold ||
+              details.primaryVelocity! < -Feed.swipeVelocityThreshold;
+
+          final negativeDragThresholdMet = _currentItemOffset >
+                  _containerSize.height * Feed.swipePositionThreshold ||
+              details.primaryVelocity! > Feed.swipeVelocityThreshold;
+
+          DragState _state;
+          // If the length of scroll goes beyond the point of no return
+          // or if a small flick was faster than the velocity threshold
+          if (positiveDragThresholdMet && index < videosListLength - 1) {
+            // build animation, set state to animate forward
+            // Animate to next card
+            _state = DragState.animatingForward;
+          } else if (negativeDragThresholdMet) {
+            if (index == 0) {
+              _state = DragState.animatingToCancel;
+            } else {
+              _state = DragState.animatingBackward;
+            }
+          } else if (positiveDragThresholdMet &&
+              index == videosListLength - 1) {
+            _state = DragState.animatingToCancel;
+          } else {
+            _state = DragState.animatingToCancel;
+          }
+          setState(() {
+            _dragState = _state;
+          });
+          _createAnimation();
+        },
+      ),
+    );
+  }
+
+  Widget _buildNextItem({
+    required int index,
+    required int videosListLength,
+  }) {
+    if (index >= videosListLength) return Container();
+    return Positioned(
+      top: _containerSize.height + _currentItemOffset,
+      child: SizedBox.fromSize(
+        size: _containerSize,
+        child: VideoCard(controller: _nextVideoController),
+      ),
     );
   }
 
@@ -283,5 +341,14 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
       });
       _createAnimation();
     }
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _previousVideoController.dispose();
+    _currentVideoController.dispose();
+    _nextVideoController.dispose();
+    super.dispose();
   }
 }

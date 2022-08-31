@@ -1,39 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 
 class VideoCard extends StatelessWidget {
-  const VideoCard({
-    super.key,
-    required this.index,
-    required this.backgroundColor,
-    required this.title,
-  });
+  const VideoCard({super.key, required this.controller});
 
-  final int index;
-  final Color backgroundColor;
-  final String title;
+  final VideoPlayerController controller;
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: backgroundColor,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '$index',
-              key: Key('$index-text'),
-              style: const TextStyle(fontSize: 48, color: Colors.white),
-            ),
-            Text(
-              title,
-              key: Key('$index-title'),
-              style: const TextStyle(fontSize: 24, color: Colors.white),
-            ),
-          ],
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return controller.value.isInitialized
+            ? ColoredBox(
+                color: Colors.black,
+                child: AspectRatio(
+                  aspectRatio: controller.value.aspectRatio,
+                  child: VideoPlayer(controller),
+                ),
+              )
+            : const Center(child: CircularProgressIndicator());
+      },
     );
   }
 }
