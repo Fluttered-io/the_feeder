@@ -12,12 +12,6 @@ enum DragState {
   animatingToCancel,
 }
 
-const colors = [
-  Colors.red,
-  Colors.green,
-  Colors.blue,
-];
-
 class Feed extends StatefulWidget {
   const Feed({super.key});
 
@@ -124,6 +118,34 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
                               _nextVideoController.setLooping(true);
                               setState(() {});
                             });
+                        },
+                      ),
+                      BlocListener<HomeCubit, HomeState>(
+                        listenWhen: (previous, current) =>
+                            current.currentItemIndex <
+                            previous.currentItemIndex,
+                        listener: (BuildContext context, HomeState state) {
+                          final currentItemIndex = state.currentItemIndex;
+                          if (currentItemIndex < state.videos.length - 1) {
+                            _nextVideoController =
+                                VideoPlayerController.network(
+                              state.videos[currentItemIndex + 1].url,
+                            );
+                            _nextVideoController.initialize().then((_) {
+                              _nextVideoController.setLooping(true);
+                              setState(() {});
+                            });
+                          }
+                          _currentVideoController.dispose();
+                          _currentVideoController = _previousVideoController
+                            ..play();
+                          _previousVideoController =
+                              VideoPlayerController.network(
+                            state.videos[currentItemIndex - 1].url,
+                          )..initialize().then((_) {
+                                  _previousVideoController.setLooping(true);
+                                  setState(() {});
+                                });
                         },
                       ),
                     ],
