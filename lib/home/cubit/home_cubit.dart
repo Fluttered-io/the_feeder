@@ -49,4 +49,35 @@ class HomeCubit extends Cubit<HomeState> {
       );
     }
   }
+
+  Future<void> getMoreVideos() async {
+    try {
+      final videos = await _videosRepository.getVideos();
+      emit(
+        state.copyWith(
+          videos: state.videos + videos,
+        ),
+      );
+    } on api_client.VideoFeedRequestException {
+      emit(
+        state.copyWith(
+          status: const HomeStatus.failure('Error requesting the video feed'),
+        ),
+      );
+    } on api_client.VideoFeedNotFoundException {
+      emit(
+        state.copyWith(
+          status: const HomeStatus.failure('Video feed not found'),
+        ),
+      );
+    } catch (_) {
+      emit(
+        state.copyWith(
+          status: const HomeStatus.failure(
+            'Something went wrong, please try again',
+          ),
+        ),
+      );
+    }
+  }
 }
