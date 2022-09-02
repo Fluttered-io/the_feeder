@@ -16,25 +16,24 @@ enum DragState {
 
 class Feed extends StatefulWidget {
   const Feed({super.key});
-
-  /// The amount of screen that has to be scrolled to animate the item to the
-  /// next or previous position.
-  static const double swipePositionThreshold = 0.2;
-
-  /// It will override the [swipePositionThreshold] if the item is dragged
-  /// quickly.
-  static const double swipeVelocityThreshold = 1000;
-
-  static const Duration animationDuration = Duration(milliseconds: 400);
-
   @override
   State<Feed> createState() => _FeedState();
 }
 
 class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
+  /// The amount of screen that has to be scrolled to animate the item to the
+  /// next or previous position.
+  final double _swipePositionThreshold = 0.2;
+
+  /// It will override the [_swipePositionThreshold] if the item is dragged
+  /// quickly.
+  final double _swipeVelocityThreshold = 1000;
+
   /// The incrementor of the current item index that points into the next
   /// video to be loaded.
   final int _videoToLoadPosition = 3;
+
+  bool _draggingLocked = false;
 
   late Size _containerSize;
   late double _currentItemOffset;
@@ -43,11 +42,6 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
   late Animation<double> _animation;
   late AnimationController _animationController;
 
-  /// Internal index for tracking desired controller target page index
-  int _targetIndex = -1;
-
-  bool _draggingLocked = false;
-
   @override
   void initState() {
     _currentItemOffset = 0;
@@ -55,7 +49,7 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
     _dragState = DragState.idle;
     _animationController = AnimationController(
       vsync: this,
-      duration: Feed.animationDuration,
+      duration: const Duration(milliseconds: 400),
     );
     super.initState();
   }
@@ -176,8 +170,8 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
           // If the length of scroll goes beyond the point of no return
           // or if a small flick was faster than the velocity threshold.
           final positiveDragThresholdMet = _currentItemOffset <
-                  -_containerSize.height * Feed.swipePositionThreshold ||
-              details.primaryVelocity! < -Feed.swipeVelocityThreshold;
+                  -_containerSize.height * _swipePositionThreshold ||
+              details.primaryVelocity! < -_swipeVelocityThreshold;
 
           DragState _state;
 
@@ -279,43 +273,7 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
         _animation.removeListener(_animationListener);
         _animationController.reset();
         _animation.removeStatusListener(_animationStatusListener);
-
-        // check if we need to keep animated after this one is complete
-        if (_targetIndex != -1 && newCardIndex != _targetIndex) {
-          _animateToPosition(_targetIndex);
-        } else {
-          setState(() {
-            _targetIndex = -1;
-          });
-        }
       }
-    }
-  }
-
-  /// Implementation used by [Controller] to goto the given page [targetPage]
-  /// with an animation. This uses the existing animation settings including
-  /// the duration per scroll.
-  /// This function is called per page (ie multiple times if starting position
-  /// and [targetPage] are not adjacent pages.
-  void _animateToPosition(int targetPage) {
-    // Check if further animations are required to reach [targetPage]
-    if (targetPage == -1) {
-      return;
-    }
-    final state = context.read<HomeCubit>().state;
-    final index = state.currentItemIndex;
-    if (targetPage > index && index != state.videos.length - 1) {
-      setState(() {
-        _dragState = DragState.animatingForward;
-        _targetIndex = targetPage;
-      });
-      _createAnimation();
-    } else if (targetPage < index && index != 0) {
-      setState(() {
-        _dragState = DragState.animatingBackward;
-        _targetIndex = targetPage;
-      });
-      _createAnimation();
     }
   }
 
