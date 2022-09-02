@@ -5,7 +5,7 @@ class HomeState with _$HomeState {
   const factory HomeState({
     @Default(HomeStatus.initial()) HomeStatus status,
     @Default(0) int currentItemIndex,
-    @Default([]) List<Video> videos,
+    @Default([]) List<VideoPlayerController> videos,
   }) = _HomeState;
 }
 

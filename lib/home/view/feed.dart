@@ -32,20 +32,21 @@ class Feed extends StatefulWidget {
 }
 
 class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
+  /// The incrementor of the current item index that points into the next
+  /// video to be loaded.
+  final int _videoToLoadPosition = 3;
+
   late Size _containerSize;
   late double _currentItemOffset;
   late double _dragStartPosition;
   late DragState _dragState;
   late Animation<double> _animation;
   late AnimationController _animationController;
-  late VideoPlayerController _currentVideoControllerA;
-  late VideoPlayerController _currentVideoControllerB;
 
   /// Internal index for tracking desired controller target page index
   int _targetIndex = -1;
 
   bool _draggingLocked = false;
-  bool _isCurrentVideoControllerA = true;
 
   @override
   void initState() {
@@ -56,8 +57,6 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
       vsync: this,
       duration: Feed.animationDuration,
     );
-    _currentVideoControllerA = VideoPlayerController.network('');
-    _currentVideoControllerB = VideoPlayerController.network('');
     super.initState();
   }
 
@@ -72,97 +71,78 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
           listener: (BuildContext context, HomeState state) async {
             /// Initializes all the video controllers with the first load of the
             /// video feed.
-            final index = state.currentItemIndex;
-            final nextVideoUrl = state.videos[index + 1].url;
             if (state.status.isSuccess) {
-              _currentVideoControllerA = VideoPlayerController.network(
-                state.videos[index].url,
-              );
-              _currentVideoControllerB = VideoPlayerController.network(
-                nextVideoUrl,
-              );
-              await _currentVideoControllerA.initialize();
-              await _currentVideoControllerB.initialize();
-              await _currentVideoControllerA.play();
+              await state.videos[0].play();
               setState(() {});
-              unawaited(_currentVideoControllerA.setLooping(true));
-              unawaited(_currentVideoControllerB.setLooping(true));
+              unawaited(state.videos[0].setLooping(true));
             }
           },
           builder: (BuildContext context, HomeState state) {
-            return BlocConsumer<HomeCubit, HomeState>(
-              listenWhen: (previous, current) =>
-                  current.currentItemIndex > previous.currentItemIndex,
-              buildWhen: (previous, current) =>
-                  current.currentItemIndex != previous.currentItemIndex,
-              listener: (BuildContext context, HomeState state) async {
-                final index = state.currentItemIndex;
+            return state.status.isSuccess
+                ? BlocConsumer<HomeCubit, HomeState>(
+                    listenWhen: (previous, current) =>
+                        current.currentItemIndex > previous.currentItemIndex,
+                    buildWhen: (previous, current) =>
+                        current.currentItemIndex != previous.currentItemIndex,
+                    listener: (BuildContext context, HomeState state) async {
+                      final cubit = context.read<HomeCubit>();
+                      final currentIndex = state.currentItemIndex;
+                      final currentVideo = state.videos[currentIndex];
+                      final previousVideo = state.videos[currentIndex - 1];
+                      final nextVideo = state.videos[currentIndex + 1];
+                      final nextVideoToLoad =
+                          state.videos[currentIndex + _videoToLoadPosition];
 
-                /// Locks dragging to avoid unloaded cards shown in
-                /// the UI and shows the backup controller with the
-                /// video already loaded to prevent a slower UI.
-                setState(() {
-                  _draggingLocked = true;
-                  _isCurrentVideoControllerA = !_isCurrentVideoControllerA;
-                });
+                      /// Locks dragging to avoid unloaded items to be shown.
+                      setState(() {
+                        _draggingLocked = true;
+                      });
 
-                /// Loads more videos if we are in the item before
-                /// the last one.
-                if (index == state.videos.length - 2) {
-                  await context.read<HomeCubit>().getMoreVideos();
-                }
+                      await previousVideo.pause();
+                      await currentVideo.play();
+                      unawaited(currentVideo.setLooping(true));
 
-                if (_isCurrentVideoControllerA) {
-                  await _currentVideoControllerB.setVolume(0);
-                  await _currentVideoControllerA.play();
-                } else {
-                  await _currentVideoControllerA.setVolume(0);
-                  await _currentVideoControllerB.play();
-                }
+                      /// Fetch for new videos to be loaded.
+                      if (currentIndex + _videoToLoadPosition + 1 ==
+                          state.videos.length) {
+                        await cubit.getMoreVideos();
+                      }
 
-                /// Dispose previous visible controller and reload
-                /// with the next video.
-                if (_isCurrentVideoControllerA) {
-                  await _currentVideoControllerB.dispose();
-                  _currentVideoControllerB = VideoPlayerController.network(
-                    state.videos[index + 1].url,
-                  );
-                  await _currentVideoControllerB.initialize();
-                  unawaited(
-                    _currentVideoControllerB.setLooping(true),
-                  );
-                } else {
-                  await _currentVideoControllerA.dispose();
-                  _currentVideoControllerA = VideoPlayerController.network(
-                    state.videos[index + 1].url,
-                  );
-                  await _currentVideoControllerA.initialize();
-                  unawaited(
-                    _currentVideoControllerA.setLooping(true),
-                  );
-                }
+                      /// Dispose previous video controller to save memory.
+                      if (currentIndex > _videoToLoadPosition) {
+                        unawaited(previousVideo.dispose());
+                      }
 
-                setState(() {
-                  _draggingLocked = false;
-                });
-              },
-              builder: (context, state) {
-                return state.status.isSuccess
-                    ? Stack(
+                      /// If the user swipes too fast it's possible that some
+                      /// videos are not loaded yet. This will wait until the
+                      /// next video is loaded to unlock dragging.
+                      if (!nextVideo.value.isInitialized) {
+                        await nextVideo.initialize();
+                      }
+
+                      unawaited(nextVideoToLoad.initialize());
+                      setState(() {
+                        _draggingLocked = false;
+                      });
+                    },
+                    builder: (context, state) {
+                      return Stack(
                         children: <Widget>[
                           _buildCurrentItem(
+                            video: state.videos[state.currentItemIndex],
                             index: state.currentItemIndex,
                             videosListLength: state.videos.length,
                           ),
                           _buildNextItem(
+                            video: state.videos[state.currentItemIndex + 1],
                             index: state.currentItemIndex + 1,
                             videosListLength: state.videos.length,
                           ),
                         ],
-                      )
-                    : const Center(child: CircularProgressIndicator());
-              },
-            );
+                      );
+                    },
+                  )
+                : const Center(child: CircularProgressIndicator());
           },
         );
       },
@@ -170,6 +150,7 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildCurrentItem({
+    required VideoPlayerController video,
     required int index,
     required int videosListLength,
   }) {
@@ -178,11 +159,7 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
       child: GestureDetector(
         child: SizedBox.fromSize(
           size: _containerSize,
-          child: VideoCard(
-            controller: _isCurrentVideoControllerA
-                ? _currentVideoControllerA
-                : _currentVideoControllerB,
-          ),
+          child: VideoCard(controller: video),
         ),
         onVerticalDragStart: (DragStartDetails details) {
           setState(() {
@@ -224,6 +201,7 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildNextItem({
+    required VideoPlayerController video,
     required int index,
     required int videosListLength,
   }) {
@@ -232,11 +210,9 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
       top: _containerSize.height + _currentItemOffset,
       child: SizedBox.fromSize(
         size: _containerSize,
-        child: VideoCard(
-          controller: _isCurrentVideoControllerA
-              ? _currentVideoControllerB
-              : _currentVideoControllerA,
-        ),
+        child: _draggingLocked
+            ? const ColoredBox(color: Colors.black)
+            : VideoCard(controller: video),
       ),
     );
   }
@@ -346,8 +322,6 @@ class _FeedState extends State<Feed> with SingleTickerProviderStateMixin {
   @override
   void dispose() {
     _animationController.dispose();
-    _currentVideoControllerA.dispose();
-    _currentVideoControllerB.dispose();
     super.dispose();
   }
 }

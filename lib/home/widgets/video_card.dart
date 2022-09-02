@@ -18,7 +18,7 @@ class VideoCard extends StatelessWidget {
                   child: VideoPlayer(controller),
                 ),
               )
-            : const Center(child: CircularProgressIndicator());
+            : const Center(child: Text('Loading video...'));
       },
     );
   }
